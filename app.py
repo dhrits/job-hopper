@@ -1,3 +1,4 @@
+from concurrent.futures import thread
 import os
 import uuid
 from typing import List
@@ -73,5 +74,6 @@ async def main(message):
         if stream_resp["event"] == "on_chain_stream" and stream_resp["metadata"].get('langgraph_node','') == "assistant":
             chunk = stream_resp["data"]["chunk"]
             await msg.stream_token(chunk['messages'][-1].content)
-
+        else: # Show spinner
+            await msg.stream_token("")
     await msg.send()
