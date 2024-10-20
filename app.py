@@ -14,12 +14,11 @@ _ = load_dotenv()
 
 def process_input_file(file: AskFileResponse):
     """Reads the input `file` and returns the resulting documents"""
-    # import tempfile
-    # with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as temp_file:
-    #     temp_file_path = temp_file.name
-    # with open(temp_file_path, "wb") as f:
-    #     f.write(file.content)
-    temp_file_path = file.path
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".pdf") as temp_file:
+        temp_file_path = temp_file.name
+    with open(temp_file_path, "wb") as f:
+        f.write(file.content)
     loader = PyMuPDFLoader(temp_file_path)
     documents = loader.load()
     return documents[0].page_content
