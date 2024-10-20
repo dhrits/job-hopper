@@ -40,8 +40,8 @@ MODEL_MINI = "gpt-4o-mini"
 # MODEL = 'o1-preview'
 # MODEL_MINI = 'o1-mini'
 
-EMBED_MODEL_URL = "https://kokpt1wbsv2ul4jl.us-east-1.aws.endpoints.huggingface.cloud"
-COLLECTION_NAME = "indeed_jobs_db3"
+EMBED_MODEL_URL = "https://uniui42lc3nrxgsj.us-east-1.aws.endpoints.huggingface.cloud"
+COLLECTION_NAME = "indeed_jobs_long"
 
 _qclient = QdrantClient(
     url=os.environ.get('QDRANT_DB_BITTER_MAMMAL'), # Name of the qdrant cluster is bitter_mammal
