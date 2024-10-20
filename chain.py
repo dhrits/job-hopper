@@ -2,6 +2,9 @@ import os
 from typing import Tuple, List
 import torch
 from operator import itemgetter
+from qdrant_client import QdrantClient
+from langchain_qdrant import QdrantVectorStore
+from qdrant_client.http.models import Distance, VectorParams
 from langchain_core.prompts.chat import SystemMessagePromptTemplate, ChatPromptTemplate, PromptTemplate
 from langchain_core.messages import SystemMessage, ChatMessage, HumanMessage
 from langchain_core.runnables import Runnable, RunnableParallel, RunnablePassthrough
@@ -18,6 +21,7 @@ from langchain_community.tools import TavilySearchResults
 from langchain_community.retrievers import TavilySearchAPIRetriever
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFaceEmbeddings
+from langchain_huggingface.embeddings import HuggingFaceEndpointEmbeddings
 from langchain_community.document_loaders import UnstructuredURLLoader
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_core.documents.base import Document
@@ -29,10 +33,32 @@ from langgraph.graph import START, StateGraph
 from langgraph.prebuilt import tools_condition, ToolNode
 from langgraph.checkpoint.memory import MemorySaver
 
+from dotenv import load_dotenv; _ = load_dotenv()
+
 MODEL = "gpt-4o"
 MODEL_MINI = "gpt-4o-mini"
 # MODEL = 'o1-preview'
 # MODEL_MINI = 'o1-mini'
+
+EMBED_MODEL_URL = "https://kokpt1wbsv2ul4jl.us-east-1.aws.endpoints.huggingface.cloud"
+COLLECTION_NAME = "indeed_jobs_db3"
+
+_qclient = QdrantClient(
+    url=os.environ.get('QDRANT_DB_BITTER_MAMMAL'), # Name of the qdrant cluster is bitter_mammal
+    api_key=os.environ.get('QDRANT_API_KEY_BITTER_MAMMAL'),
+)
+
+_embeddings = HuggingFaceEndpointEmbeddings(
+    model=EMBED_MODEL_URL,
+    task="feature-extraction",
+    huggingfacehub_api_token=os.environ["HF_TOKEN"],
+)
+
+_vector_store = QdrantVectorStore(
+    client=_qclient,
+    collection_name="indeed_jobs_db3",
+    embedding=_embeddings,
+)
 
 SYS_PROMPT = """
 You are a helpful job-coach. Your goal is to help answer any of the user's questions about job-postings, job-requirements,
