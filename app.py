@@ -67,10 +67,11 @@ async def main(message):
 
     msg = cl.Message(content="")
     messages = [HumanMessage(content=message.content)]
-    result = chain.astream({'messages': messages}, config, stream_mode="updates")
+    result = chain.astream_events({'messages': messages}, config, version="v2")
 
     async for stream_resp in result:
-        if 'assistant' in stream_resp:
-            await msg.stream_token(stream_resp['assistant']['messages'][-1].content)
+        if stream_resp["event"] == "on_chain_stream" and stream_resp["metadata"].get('langgraph_node','') == "assistant":
+            chunk = stream_resp["data"]["chunk"]
+            await msg.stream_token(chunk['messages'][-1].content)
 
     await msg.send()
