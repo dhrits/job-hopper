@@ -60,12 +60,16 @@ _vector_store = QdrantVectorStore(
     embedding=_embeddings,
 )
 
+_retriever = _vector_store.as_retriever(search_kwargs={"k": 10})
+
 SYS_PROMPT = """
 You are a helpful job-coach. Your goal is to help answer any of the user's questions about job-postings, job-requirements,
 interviews, contents of resume etc. The user has provided you their resume below. You can make use of any of the tools available to you to best
 answer the user's questions. 
 
-Please follow the following guidelines:
+Think step-by-step about the user's question and what (if any) tool calls you may need to answer the question.
+
+Additionally please follow the following guidelines in your responses:
 
 1. Be as helpful as you can. Don't lie, but be encouraging.
 
@@ -95,6 +99,59 @@ def url_resolver(url: str) -> str:
     documents = loader.load()
     contents = documents[0].page_content
     return contents
+
+def resume_consultant(resume: str, question: str) -> str:
+    """Given a `resume` and a `question`, answers the question using a database of real-time and current job-postings
+    using the resume as a reference to find matching job postings"""
+
+    prompt = """
+    Given the question, resume and context below, answer the question based on the contents of the resume and the context.
+    Provide as much detail from the context as possible.
+
+    Question:
+    {question}
+
+    Resume:
+    {resume}
+
+    Context:
+    {context}
+    """
+    llm = ChatOpenAI(model=MODEL, temperature=0)
+    prompt = ChatPromptTemplate.from_template(prompt)
+    rag_chain = (
+            {"context": (lambda d: d['question'] + "\n\nResume:\n" + d['resume']) | _retriever, "question": itemgetter("question"), "resume": itemgetter("resume")}
+            | RunnablePassthrough.assign(context=itemgetter("context"), resume=itemgetter("resume"))
+            | {"response": prompt | llm, "context": itemgetter("context")}
+        )
+
+    resp = rag_chain.invoke({"resume": resume, "question": question})
+    return resp["response"].content
+
+
+def jobs_consultant(question: str) -> str:
+    """Given a `question` about jobs or job requirements, answers the `question` using a database of real-time and current job-posting"""
+    prompt = """
+    You are a professional job consultant. Use the context provided below to answer the question.
+    
+    If you do not know the answer, or are unsure, say you don't know.
+    
+    Question:
+    {question}
+    
+    Context:
+    {context}
+    """
+    llm = ChatOpenAI(model=MODEL, temperature=0)
+    prompt = ChatPromptTemplate.from_template(prompt)
+    rag_chain = (
+        {"context": itemgetter("question") | _retriever, "question": itemgetter("question")}
+        | RunnablePassthrough.assign(context=itemgetter("context"))
+        | {"response": prompt | llm, "context": itemgetter("context")}
+    )
+    results = rag_chain.invoke({'question': question})
+    return results['response'].content
+
 
 def resume_writer(resume: str, job_description: str) -> str:
     """Given a `resume` and `job_description`, tailors this resume to the specific job description"""
@@ -159,7 +216,7 @@ def web_searcher(query: str) -> (str, List[Document]):
 def get_conversation_chain(resume, thread_id):
     """Gets the conversation chain based on resume and config"""
     sys_msg = SystemMessagePromptTemplate.from_template(SYS_PROMPT).format(resume=resume)
-    tools = [url_resolver, resume_writer, cover_letter_writer, web_searcher]
+    tools = [url_resolver, resume_consultant, jobs_consultant, resume_writer, cover_letter_writer, web_searcher]
     llm = ChatOpenAI(model=MODEL)
     llm_with_tools = llm.bind_tools(tools)
 

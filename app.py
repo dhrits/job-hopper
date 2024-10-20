@@ -1,5 +1,6 @@
 from concurrent.futures import thread
 import os
+import logging
 import uuid
 from typing import List
 from chainlit.types import AskFileResponse
@@ -12,6 +13,9 @@ from dotenv import load_dotenv
 from chain import get_conversation_chain
 
 _ = load_dotenv()
+
+logging.basicConfig(level=logging.INFO)
+_logger = logging.getLogger(name='nodes')
 
 def process_input_file(file: AskFileResponse):
     """Reads the input `file` and returns the resulting documents"""
@@ -71,6 +75,9 @@ async def main(message):
     result = chain.astream_events({'messages': messages}, config, version="v2")
 
     async for stream_resp in result:
+        _logger.debug(msg=f"Calling node: {stream_resp['metadata'].get('langgraph_node','')}")
+        #print(f"Calling node: {stream_resp['metadata'].get('langgraph_node','')}")
+        #print(stream_resp)
         if stream_resp["event"] == "on_chain_stream" and stream_resp["metadata"].get('langgraph_node','') == "assistant":
             chunk = stream_resp["data"]["chunk"]
             await msg.stream_token(chunk['messages'][-1].content)
