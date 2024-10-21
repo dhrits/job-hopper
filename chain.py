@@ -28,7 +28,7 @@ from langchain_core.documents.base import Document
 from langchain.output_parsers import PydanticOutputParser
 
 from langgraph.graph import MessagesState
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, RemoveMessage
 from langgraph.graph import START, StateGraph
 from langgraph.prebuilt import tools_condition, ToolNode
 from langgraph.checkpoint.memory import MemorySaver
@@ -41,7 +41,7 @@ MODEL_MINI = "gpt-4o-mini"
 # MODEL_MINI = 'o1-mini'
 
 EMBED_MODEL_URL = "https://uniui42lc3nrxgsj.us-east-1.aws.endpoints.huggingface.cloud"
-COLLECTION_NAME = "indeed_jobs_long"
+COLLECTION_NAME = "indeed_jobs_db_long"
 
 _qclient = QdrantClient(
     url=os.environ.get('QDRANT_DB_BITTER_MAMMAL'), # Name of the qdrant cluster is bitter_mammal
@@ -56,7 +56,7 @@ _embeddings = HuggingFaceEndpointEmbeddings(
 
 _vector_store = QdrantVectorStore(
     client=_qclient,
-    collection_name="indeed_jobs_db3",
+    collection_name=COLLECTION_NAME,
     embedding=_embeddings,
 )
 
@@ -84,12 +84,17 @@ to resolve the URL to a job description.
 
 5. If the user asks you to edit their resume or cover-letter, MAKE SURE you actually share the resulting resume and cover letter in your final message.
 
+6. If the user asks for open roles, MAKE SURE you provide all details about open roles.
+
 Begin with a warm greeting to the user (using their name if available) and tell them about yourself.
 
 
 Resume:
 {resume}
 """
+
+class SummaryState(MessagesState):
+    summary: str
 
 # Tools
 
@@ -213,6 +218,34 @@ def web_searcher(query: str) -> (str, List[Document]):
     results = rag_chain.invoke({'question': query})
     return results['response'], results['context']
 
+def summarize(state: SummaryState):
+    """
+    Summarizes the conversation if the number of messages in state are too many messages.
+    It checks if the number of messages is > 60. If so, it summarizes the conversation in
+    summary field and deletes old messages.
+    """
+    if len(state['messages']) < 60:
+        # No concern here
+        return {'messages': state['messages']}
+    else:
+        print("[summarize] Too many messages. Pruning and summarizing")
+        model = ChatOpenAI(model=MODEL, temperature=0)
+        # Check if previous summary exists
+        summary = state.get('summary', "")
+        if summary:
+            # A summary already exists
+            summary_message = (
+                f"This is summary of the conversation to date: {summary}\n\n"
+                "Extend the summary by taking into account the new messages above:"
+            )
+        else:
+            summary_message = "Create a summary of the conversation above:"
+        messages = state['messages'] + [HumanMessage(content=summary_message)]
+        response = model.invoke(messages)
+        # Delete all but last two messages
+        delete_messages = [RemoveMessage(id=m.id) for m in state["messages"][:-2]]
+        return {"summary": response.content, "messages": delete_messages}
+
 def get_conversation_chain(resume, thread_id):
     """Gets the conversation chain based on resume and config"""
     sys_msg = SystemMessagePromptTemplate.from_template(SYS_PROMPT).format(resume=resume)
@@ -220,12 +253,18 @@ def get_conversation_chain(resume, thread_id):
     llm = ChatOpenAI(model=MODEL)
     llm_with_tools = llm.bind_tools(tools)
 
-    def assistant(state: MessagesState):
-       """Helper function to invoke assistant"""
-       return {"messages": [llm_with_tools.invoke([sys_msg] + state["messages"])]}
+    def assistant(state: SummaryState):
+        summary = state.get('summary', '')
+        if summary:
+            summary_message = f"Summary of conversation earlier: {summary}"
+            messages = [SystemMessage(summary_message)] + state['messages']
+        else:
+            messages = state['messages']
     
+        return {"messages": [llm_with_tools.invoke([sys_msg] + messages)]}
+   
     memory = MemorySaver()
-    builder = StateGraph(MessagesState)
+    builder = StateGraph(SummaryState)
 
     builder.add_node("assistant", assistant)
     builder.add_node("tools", ToolNode(tools))
