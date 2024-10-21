@@ -23,7 +23,7 @@ Note: Since this is just an educational project to explore the capabilities of L
 
 This application is primarily built on top of [LangChain](https://www.langchain.com/), [LangGraph](https://www.langchain.com/langgraph), [OpenAI GPT-4o](https://openai.com/index/hello-gpt-4o/), and [Qdrant Vector Database](https://qdrant.tech/) using Qdrant Cloud. 
 
-Retrieval from the vectorstore is performed using a fine-tuned version of [Snowflake Arctic Embed Long model](https://huggingface.co/Snowflake/snowflake-arctic-embed-m-long) trained on [indeed jobs dataset](https://www.kaggle.com/datasets/promptcloud/indeed-job-posting-dataset) for best retrieval performance
+Retrieval from the vectorstore is performed using a fine-tuned version of [Snowflake Arctic Embed Long model](https://huggingface.co/Snowflake/snowflake-arctic-embed-m-long) trained on [indeed jobs dataset](https://www.kaggle.com/datasets/promptcloud/indeed-job-posting-dataset) for best retrieval performance. The model was deployed using [Hugging Face Inference Endpoints](https://huggingface.co/inference-endpoints/dedicated).
 
 While these components are customizable, this combination gave the best performance. 
 
